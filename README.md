@@ -22,7 +22,7 @@ Dibangun menggunakan **Golang (Chi Router)** dengan **Clean Architecture** dan p
 
 ### Clone repo
 ```bash
-git clone https://github.com/<username>/payment_backend.git
+git clone https://github.com/Try-Payment-Gateway/go-backend.git
 cd payment_backend
 ```
 
