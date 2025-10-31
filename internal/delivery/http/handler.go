@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -31,18 +32,23 @@ func NewHandler(uc *usecase.QRUsecase, repo *repository.SQLiteRepo) *Handler {
 
 func (h *Handler) Routes(sig SigConfig) http.Handler {
 	r := chi.NewRouter()
+
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
+
 	r.Use(SignatureMiddleware(sig))
 
 	r.Post("/api/v1/qr/generate", h.GenerateQR)
 	r.Post("/api/v1/qr/payment", h.PaymentCallback)
-
-	r.Group(func(g chi.Router) {
-		g.Use(func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { next.ServeHTTP(w, r) })
-		})
-		g.Get("/api/v1/transactions", h.ListTransactions)
-		g.Get("/api/v1/transactions/{referenceNo}", h.GetTransaction)
-	})
+	r.Get("/api/v1/transactions", h.ListTransactions)
+	r.Get("/api/v1/transactions/{referenceNo}", h.GetTransaction)
+	r.Get("/api/v1/healthz", h.Healthz)
 
 	return r
 }
@@ -144,7 +150,6 @@ func (h *Handler) PaymentCallback(w http.ResponseWriter, r *http.Request) {
 	err := h.uc.PaymentCallback(r.Context(), req.OriginalReferenceNo, status, req.PaidTime)
 	if err != nil {
 		if err == repository.ErrNotFound {
-			// transaction not found (wajib)
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "transaction not found"})
 			return
 		}
@@ -215,7 +220,7 @@ func toTxItem(t domain.Transaction) TxItem {
 		ReferenceNo:        t.ReferenceNo,
 		PartnerReferenceNo: t.PartnerReferenceNo,
 		MerchantID:         t.MerchantID,
-		AmountString:       formatMinorToString(t.AmountValueMinor), // "10000.00"
+		AmountString:       formatMinorToString(t.AmountValueMinor),
 		Currency:           t.Currency,
 		Status:             string(t.Status),
 		TransactionDate:    t.TransactionDate,
